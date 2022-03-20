@@ -72,7 +72,7 @@ ggplot(hotels,
 
 
 
-## Modelimprovements
+## Model improvements
 
 ### what model was finally selected and why
 
