@@ -30,24 +30,29 @@ View(hotels)
 skimr::skim(hotels)
 ```
 
-很多 duplicated and empty data
-Manipulate 一下
-```{r}
-
-```
-
-Drop the extreme point (adr > 5000)
+### 整理数据
+画图发现adr>5000，故Drop the extreme point (adr > 5000)
+同时设置total_nights变量取代两个stays
+同时设置kids变量取代children和babies
+Drop `reservation_status` and `reservation_status_date`
 ```{r}
 hotels <- hotels %>%
   filter(adr < 4000) %>% 
-  mutate(total_nights = stays_in_weekend_nights+stays_in_week_nights)
+  mutate(total_nights = stays_in_weekend_nights+stays_in_week_nights) %>% 
+  mutate(kids = case_when(
+    children + babies > 0 ~ "kids",
+    TRUE ~ "none"
+  ))
 
 hotels <- hotels %>%
-  select(-stays_in_weekend_nights, -stays_in_week_nights)
+  select(-stays_in_weekend_nights, -stays_in_week_nights) %>%
+  select(-babies, -children) %>%
+  select(-reservation_status, -reservation_status_date) 
 ```
 
-
-
+```{r}
+skimr::skim(hotels)
+```
 
 ### Simple visualisations of the data
 
@@ -58,9 +63,15 @@ ggplot(hotels,
 ```
 
 
-
-
 ## Model fitting
+
+下面这些相关度不高或值较多，舍弃meal、country、market_segment、distribution_channel、agent、company、days_in_waiting_list、required_car_parking_spaces、reserved_room_type和assigned_room_type
+```{r}
+hotels <- hotels %>%
+  select(-meal, -country, -market_segment, -distribution_channel, -agent, -company, -days_in_waiting_list, -required_car_parking_spaces, -reserved_room_type, -assigned_room_type)
+```
+
+
 
 ### any train/test/validate, cross-validation, nested resampling or bootstrap strategies employed
 
