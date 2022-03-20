@@ -1,0 +1,102 @@
+---
+title: "classification"
+author: "cshb26"
+date: "3/19/2022"
+output: pdf_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+```{r}
+library("tidyverse")
+library("ggplot2")
+```
+
+
+## Problem Description
+
+### Description of the data and the explanation of the objective of the analysis
+
+```{r}
+hotels = readr::read_csv("https://www.louisaslett.com/Courses/MISCADA/hotels.csv")
+View(hotels)
+```
+
+### Initial data summary
+
+```{r}
+skimr::skim(hotels)
+```
+
+很多 duplicated and empty data
+Manipulate 一下
+```{r}
+
+```
+
+Drop the extreme point (adr > 5000)
+```{r}
+hotels <- hotels %>%
+  filter(adr < 4000) %>% 
+  mutate(total_nights = stays_in_weekend_nights+stays_in_week_nights)
+
+hotels <- hotels %>%
+  select(-stays_in_weekend_nights, -stays_in_week_nights)
+```
+
+
+
+
+### Simple visualisations of the data
+
+```{r}
+ggplot(hotels,
+       aes(x = adr, y = stays_in_weekend_nights+stays_in_week_nights)) +
+  geom_point(alpha=0.1)
+```
+
+
+
+
+## Model fitting
+
+### any train/test/validate, cross-validation, nested resampling or bootstrap strategies employed
+
+
+
+
+### the approach taken to fitting, including any design, loss function, early stopping criteria, and algorithm choices
+
+
+
+
+## Modelimprovements
+
+### what model was finally selected and why
+
+
+### summaries of different approaches tried before selecting the final model
+
+
+
+### hyperparameter selection or tuning to improve model fits
+
+
+### insights into improvements achieved through different architectures (deep learning), data augmentation approaches, regularisation methods, etc
+
+
+
+## Performance report
+
+### details on the performance of the model, including calibration
+
+
+
+### reporting and justification of objective function choices
+
+
+
+### would you be more worried about false negatives or false positives in this problem, and how could you address that concern
+
