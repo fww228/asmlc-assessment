@@ -1,0 +1,271 @@
+---
+title: "class"
+author: "cshb26"
+date: "3/21/2022"
+output: html_document
+---
+
+###read data
+```{r}
+telecom=read.csv(file.choose(),header=T)
+attach(telecom)
+```
+
+
+###skim the data
+```{r}
+library("skimr")
+skim(telecom)
+```
+
+###data visulization
+##numerical data
+```{r}
+DataExplorer::plot_boxplot(telecom, by = "Churn", ncol = 3)
+```
+
+##categorical data
+```{r}
+DataExplorer::plot_bar(telecom, by = "Churn", ncol = 2)
+```
+##pairs
+```{r}
+library("GGally")
+ggpairs(telecom %>% select(SeniorCitizen, tenure, MonthlyCharges, TotalCharges),
+        aes(color = Churn))
+```
+
+
+###pre-processing the data
+```{r}
+telecom_data <- telecom %>% 
+  select(-PhoneService, -MultipleLines,-TotalCharges)
+
+a=which(telecom_data$StreamingTV=='No internet service')
+telecom_data$OnlineSecurity[a]='No'
+telecom_data$OnlineBackup[a]='No'
+telecom_data$DeviceProtection[a]='No'
+telecom_data$TechSupport[a]='No'
+telecom_data$StreamingTV[a]='No'
+telecom_data$StreamingMovies[a]='No'
+```
+
+
+###MLR 3 - select model
+
+##preprocessing data for MLR 3
+```{r}
+factor_name<-c("gender","Partner","Dependents","PhoneService","MultipleLines",
+"InternetService","OnlineSecurity","OnlineBackup", "DeviceProtection","TechSupport",
+"StreamingTV","StreamingMovies","Contract","PaperlessBilling","PaymentMethod","Churn")
+idx <- which(names(telecom_data)   %in% factor_name)
+for(i in idx ){
+    telecom_data[,i]  <-  as.factor(telecom_data[,i])
+}
+task_tele <- TaskClassif$new(id = "telecom",
+                               backend = na.omit(telecom_data),
+                               target = "Churn")
+task_tele
+```
+
+##Load package
+```{r}
+library("mlr3learners")
+library("mlr3proba")
+library("data.table")
+library("mlr3verse")
+```
+
+
+##k-folds resampling
+```{r}
+set.seed(212) # set seed for reproducibility
+tele_task=TaskClassif$new(id = "telecom",
+                               backend = telecom_data, 
+                               target = "Churn",
+                               positive = "Yes")
+
+cv5 <- rsmp("cv", folds = 5)
+cv5$instantiate(tele_task)
+```
+
+
+```{r}
+lrn_cart_cv <- lrn("classif.rpart", predict_type = "prob", xval = 10)
+
+res_cart_cv <- resample(tele_task, lrn_cart_cv, cv5, store_models = TRUE)
+rpart::plotcp(res_cart_cv$learners[[4]]$model)
+```
+
+
+##different models 
+```{r}
+lrn_baseline <- lrn("classif.featureless", predict_type = "prob")
+lrn_cart <- lrn("classif.rpart", predict_type = "prob")
+lrn_cart_cp  <- lrn("classif.rpart", predict_type = "prob", cp = 0.025, id = "cartcp")
+lrn_ranger   <- lrn("classif.ranger", predict_type = "prob")
+lrn_xgboost  <- lrn("classif.xgboost", predict_type = "prob")
+
+```
+
+
+## Dealing with missingness and factors
+```{r}
+pl_missing <- po("fixfactors") %>>%
+  po("removeconstants") %>>%
+  po("imputesample", affect_columns = selector_type(c("ordered", "factor"))) %>>%
+  po("imputemean")
+
+# Now try with a model that needs no missingness
+lrn_log_reg <- lrn("classif.log_reg", predict_type = "prob")
+pl_log_reg <- pl_missing %>>%
+  po(lrn_log_reg)
+```
+
+
+##comparison among different models
+```{r}
+tele_res <- benchmark(data.table(
+  task       = list(tele_task),
+  learner    = list(lrn_baseline,
+                    lrn_cart,
+                    lrn_cart_cp,
+                   
+                    pl_log_reg),
+  resampling = list(cv5)
+), store_models = TRUE)
+
+tele_res$aggregate(list(msr("classif.ce"),
+                   msr("classif.acc"),
+                   msr("classif.fpr"),
+                   msr("classif.fnr")))
+```
+
+
+##super learner
+```{r}
+lrnsp_log_reg <- lrn("classif.log_reg", predict_type = "prob", id = "super")
+
+# Missingness imputation pipeline
+pl_missing <- po("fixfactors") %>>%
+  po("removeconstants") %>>%
+  po("imputesample", affect_columns = selector_type(c("ordered", "factor"))) %>>%
+  po("imputemean")
+
+# Factors coding pipeline
+pl_factor <- po("encode")
+
+# Now define the full pipeline
+spr_lrn <- gunion(list(
+  # First group of learners requiring no modification to input
+  gunion(list(
+    po("learner_cv", lrn_baseline),
+    po("learner_cv", lrn_cart),
+    po("learner_cv", lrn_cart_cp)
+  )),
+  # Next group of learners requiring special treatment of missingness
+  pl_missing %>>%
+    gunion(list(
+      po("learner_cv", lrn_ranger),
+      po("learner_cv", lrn_log_reg),
+      po("nop") # This passes through the original features adjusted for
+                # missingness to the super learner
+    )),
+  # Last group needing factor encoding
+  pl_factor %>>%
+    po("learner_cv", lrn_xgboost)
+)) %>>%
+  po("featureunion") %>>%
+  po(lrnsp_log_reg)
+
+# This plot shows a graph of the learning pipeline
+spr_lrn$plot()
+
+# Finally fit the base learners and super learner and evaluate
+res_spr <- resample(tele_task, spr_lrn, cv5, store_models = TRUE)
+res_spr$aggregate(list(msr("classif.ce"),
+                       msr("classif.acc"),
+                       msr("classif.fpr"),
+                       msr("classif.fnr")))
+```
+
+
+
+ choose logistic regression model to fit our data.
+ 
+###improve the model
+```{r}
+search_space = ps(
+  epsilon = p_dbl(lower = 1e-15, upper = 1e-05),
+  maxit = p_int(lower = 1, upper = 30)
+)
+search_space
+
+measures = msrs(c("classif.acc", "time_train"))
+library("mlr3tuning")
+
+evals20 = trm("evals", n_evals = 20)
+
+instance = TuningInstanceMultiCrit$new(
+  task = tele_task,
+  learner = lrn_log_reg ,
+  resampling = rsmp("holdout"),
+  measures = measures,
+  search_space = search_space,
+  terminator = evals20
+)
+instance
+
+#tuner=tnr("random_search")
+tuner = tnr("grid_search", resolution = 5)
+tuner$optimize(instance)
+instance$result_y
+instance$result_learner_param_vals
+```
+
+
+
+
+###split the data
+```{r}
+library("rsample")
+set.seed(212) # by setting the seed we know everyone will see the same results
+# First get the training
+tele_split <- initial_split(telecom_data)
+tele_train <- training(tele_split)
+# Then further split the training into validate and test
+#tele_split2 <- initial_split(testing(tele_split), 0.5)
+#tele_validate <- training(tele_split2)
+#tele_test <- testing(tele_split2)
+tele_test <- testing(tele_split)
+```
+
+
+###logistic regression
+```{r}
+tele.fit.lr=glm(as.factor(Churn) ~ ., binomial, tele_test)
+summary(tele.fit.lr)
+```
+
+```{r}
+tele.pred.lr=predict(tele.fit.lr, tele_test, type = "response")
+tele.conf.mat=table(`true Churn` = tele_test$Churn=='Yes', `predict Churn` = tele.pred.lr > 0.5)
+tele.conf.mat
+tele.conf.mat/rowSums(tele.conf.mat)*100
+```
+
+
+##after changing the hyperparameters
+```{r}
+tele.fit.lr1=glm(as.factor(Churn) ~ ., binomial, tele_test,epsilon = 1e-5)
+summary(tele.fit.lr1)
+
+```
+```{r}
+tele.pred.lr1=predict(tele.fit.lr1, tele_test, type = "response")
+tele.conf.mat1=table(`true Churn` = tele_test$Churn=='Yes', `predict Churn` = tele.pred.lr1 > 0.5)
+tele.conf.mat1
+tele.conf.mat1/rowSums(tele.conf.mat1)*100
+```
+
+

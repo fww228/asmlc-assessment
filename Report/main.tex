@@ -28,7 +28,7 @@ Imagine you are a hotel manager and you want to know if your guests will cancel 
 
 This project is all about using a dataset from a hotel to analyse the likelihood of future guests making a booking withdrawal. The dataset contains 119,390 pieces of data, each containing 32 features such as hotel type, guest payment method, number of guests, guest wait time for confirmation, etc. Some of these features are related to cancellations and some are not.	
 
-What this project did was to filter out the relevant features and feed them to a computer, which generated a model that could be used to predict whether a guest would cancel in the future, and then optimise it to improve the accuracy of the computer's predictions. At the end of the project, the model achieved the desired accuracy rate!!!!-----???, so it can be considered a successful model.
+What this project did was to filter out the relevant features and feed them to a computer, which generated a model that could be used to predict whether a guest would cancel in the future, and then optimise it to improve the accuracy of the computer's predictions. At the end of the project, the model achieved the desired accuracy rate - 82\%, so it can be considered a successful model.
 
 The use of computers to analyse data can be very challenging but also very interesting as when analysing a dataset, we can visualise the data to make our analysis more sufficient and efficient. For example, when first reading in the dataset, we can draw a few features of interest to see the weight of each attribute, as shown in Figure 1 for total\_nights and adr, the average daily rate. It is clear from the plot that the vast majority of people choose to stay for less than 10 days and almost all hotels have an adr of no more than 300 per night.
 
@@ -108,7 +108,7 @@ A look at the dataset reveals the following redundant features or non-relevant v
 
 \subsubsection{Correlation analysis of the remaining variables}
 
-The results shown in Figure 6 and 7 can be obtained by correlation analysis of the remaining variables, and it was judged that ** had a low correlation with the predicted results, so they were removed.
+The results shown in Figure 6 and 7 can be obtained by correlation analysis of the remaining variables, and it was judged that some features had a low correlation with the predicted results, so they were removed.
 
 \begin{figure}[h]
 \centering
@@ -129,15 +129,9 @@ The above images show that there are several features such as \verb|hotel|, \ver
 
 The analysis yielded the following 2 outliers.
 
-1. As shown in Figure 8, 99\% of \verb|days_in_waiting_list| are 0, which is not representative, so is deleted.
+1. We can see from the dataset that 99\% of \verb|days_in_waiting_list| are 0, which is not representative, so is deleted.
 
-\begin{figure}[h]
-\centering
-\includegraphics[width=6cm]{days.png} %[图片大小]{图片路径}
-\caption{Percentage of each value in days\_in\_waiting\_list} %图片标题
-\end{figure}
-
-2. As shown in Figure 9, there are many values in the \verb|lead_time| category, so it was discretised and binned, i.e., the values of \verb|lead_time| were divided into 4 parts with equal frequency, and the values were replaced by categories 1-4 in order.
+2. As shown in Figure 8, there are many values in the \verb|lead_time| category, so it was discretised and binned, i.e., the values of \verb|lead_time| were divided into 4 parts with equal frequency, and the values were replaced by categories 1-4 in order.
 
 \begin{figure}[h]
 \centering
@@ -161,40 +155,77 @@ It can be seen that the model gives the probability of the full data and by sett
 
 The TPR of the model can be calculated as 93.58 and the FNR as 52.06, with an overall correct rate of 82\%, which seems good but could be improved.
 
-
 \section{Model Improvements}
 
-After the results of the simple logistic regression were obtained, a new solution using the cross-validation was devised to improve the accuracy, and this was the final model chosen. 
+The addition of the hyperparameter epsilon=1e-5 to the logistic regression was tried, however the results did not change. Therefore, cross-validation was used to improve the accuracy and the following cross-validation diagram was obtained.
 
-The specific algorithm is to classify using the classifier in the \verb|mlr3| package and obtain the final error rate by cross-validation.
+A number of different models from the \verb|mlr3| library were tried to test their accuracy, and a super learner was defined to find the best performing model. Figure 10 and 11 show the cross-validation and super learner diagrams respectively.
+
+\begin{figure}[htbp]
+\centering
+
+\subfigure[]{
+\begin{minipage}[h]{0.4\linewidth}
+\centering
+\includegraphics[width=2.6in]{val.png}
+\caption{Number}
+\end{minipage}%
+}%
+\subfigure[]{
+\begin{minipage}[h]{0.5\linewidth}
+\centering
+\includegraphics[width=2.7in]{sl.png}
+\caption{Proportion}
+\end{minipage}%
+}%
+
+\centering
+\end{figure}
+
+
 
 
 \section{Performance Report}
 
 \subsection{Model selection}
-对于简单逻辑回归的模型来说，能够得到82\%的正确率已经是不错的成绩，但如果使用交叉验证后，成绩又会再次提高。
+For a simple logistic regression model, it is good enough to get 82\% correct, but the results improve again when cross-validation is used.
 
-对于一般的数据集较小的问题来说，使用简单逻辑回归会使效率提高，因为速度较快，并且能够得到相对不错的成绩；但对于较大的数据集来说，使用如交叉验证的其他方法能够提高正确率。
+For problems with small datasets in general, using simple logistic regression will lead to an increase in efficiency because it is faster and gives a relatively good result; but for larger datasets, using other methods such as cross-validation can improve the correctness rate.
 
+\subsection{Post-model analysis}
+The number and proportion of TPR, FPR, TNR and FNR obtained by simple logistic regression are shown in Figure 12 and 13.
 
-\subsection{Model selection}
-any post-model analysis such as tuning true/false positive rates (e.g would you be more worried about false negatives or false positives in this problem, and how could you address that concern).
+\begin{figure}[htbp]
+\centering
 
+\subfigure[]{
+\begin{minipage}[h]{0.4\linewidth}
+\centering
+\includegraphics[width=2.5in]{tprn.png}
+\caption{Number}
+\end{minipage}%
+}%
+\subfigure[]{
+\begin{minipage}[h]{0.5\linewidth}
+\centering
+\includegraphics[width=3in]{tprp.png}
+\caption{Proportion}
+\end{minipage}%
+}%
 
+\centering
+\end{figure}
 
+It is clear from the results that in this model, TPR=52.06, FPR=47.94, TNR=6.42 and FNR=93.58.
 
+For false negatives and false positives, I would be more concerned about false positives in this problem. One reason is that false negatives are correctly predicted and more accurate, the other reason is false positives mean that the guest did not want to withdraw, but the system calculated that the guest would, which would cause the hotel to lose credibility.
 
 
 \ 
 
-\section{Reproducible code}
+\section{Reproducible Code}
 
 
-%\begin{figure}[h]
-%\centering
-%\includegraphics[width=12cm]{q1.png} %[图片大小]{图片路径}
-%\caption{Plot of Question 1} %图片标题
-%\end{figure}
 
 
 

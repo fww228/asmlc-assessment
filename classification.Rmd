@@ -11,7 +11,6 @@ knitr::opts_chunk$set(echo = TRUE)
 
 ```{r}
 install.packages("infotheo") #分箱
-install.packages("pROC")
 install.packages("caret")
 install.packages("mlr3verse")
 ```
@@ -173,7 +172,6 @@ View(hotels)
 
 ```{r}
 fit.lr <- glm(as.factor(is_canceled) ~ ., binomial, hotels)
-summary(fit.lr)
 ```
 
 ```{r}
@@ -182,45 +180,240 @@ ggplot(data.frame(x = pred.lr), aes(x = x)) + geom_histogram()
 ```
 
 ```{r}
-conf.mat <- table(`true cancel` = hotels$is_canceled, `predict cancel` = pred.lr > 0.5)
+conf.mat <- table(`canceled` = hotels$is_canceled, `predict cancel` = pred.lr > 0.5)
 conf.mat
+conf.mat/rowSums(conf.mat)*100
 ```
 
 ```{r}
+skimr::skim(hotels)
+```
+
+## 加入超参数
+```{r}
+fit.lr <- glm(as.factor(is_canceled) ~ ., binomial, hotels, epsilon = 1e-5)
+summary(fit.lr)
+```
+
+```{r}
+conf.mat <- table(`canceled` = hotels$is_canceled, `predict cancel` = pred.lr > 0.5)
+conf.mat
 conf.mat/rowSums(conf.mat)*100
 ```
 
 
 
 
-## Model improvements
 采用交叉验证
 
-```{r}
-hotels <- hotels %>% select(-customer_type)
-```
+### 交叉验证前处理
 
 ```{r}
+hotels <- hotels %>% select(-customer_type, -adults)
 hotels$deposit_type <- factor(hotels$deposit_type, levels=c("No Deposit", "Non Refund", "Refundable"), ordered = TRUE)
-```
-
-```{r}
-lb <- lrn("classif.featureless", predict_type = "prob")
-lc <- lrn("classif.rpart", predict_type = "prob")
-```
-
-```{r}
 hotels$is_canceled <- factor(hotels$is_canceled, levels=c("0", "1"), ordered = TRUE)
+```
+```{r}
+hotels$lead_time <- factor(hotels$lead_time)
+hotels$is_repeated_guest <- factor(hotels$is_repeated_guest)
+hotels$previous_cancellations <- factor(hotels$previous_cancellations)
+hotels$previous_bookings_not_canceled <- factor(hotels$previous_bookings_not_canceled)
+hotels$booking_changes <- factor(hotels$booking_changes)
+hotels$total_of_special_requests <- factor(hotels$total_of_special_requests)
+hotels$room_type <- factor(hotels$room_type)
+```
+
+
+```{r}
+library("mlr3learners")
+library("mlr3proba")
+library("data.table")
+library("mlr3verse")
+```
+
+
+```{r}
 set.seed(26)
-hotels_task <- TaskClassif$new(id = "is_canceled", backend = hotels, target = "is_canceled", positive = "1")
+hotels_task <- TaskClassif$new(id = "hotels", backend = na.omit(hotels), target = "is_canceled")
+
 cv5 <- rsmp("cv", folds = 5)
 cv5$instantiate(hotels_task)
 ```
 
 ```{r}
-rb <- resample(hotels_task, lb, cv5, store_models = TRUE)
-rc <- resample(hotels_task, lc, cv5, store_models = TRUE)
+lrn_cart_cv <- lrn("classif.rpart", predict_type = "prob", xval = 10)
+
+res_cart_cv <- resample(hotels_task, lrn_cart_cv, cv5, store_models = TRUE)
+rpart::plotcp(res_cart_cv$learners[[5]]$model)
 ```
+### 交叉验证结束
+
+```{r}
+skimr::skim(hotels)
+```
+
+
+## Model improvements
+
+```{r}
+lrnsp_log_reg <- lrn("classif.log_reg", predict_type = "prob", id = "super")
+
+# Missingness imputation pipeline
+pl_missing <- po("fixfactors") %>>%
+  po("removeconstants") %>>%
+  po("imputesample", affect_columns = selector_type(c("ordered", "factor"))) %>>%
+  po("imputemean")
+
+# Factors coding pipeline
+pl_factor <- po("encode")
+
+# Now define the full pipeline
+spr_lrn <- gunion(list(
+  # First group of learners requiring no modification to input
+  gunion(list(
+    po("learner_cv", lrn_baseline),
+    po("learner_cv", lrn_cart),
+    po("learner_cv", lrn_cart_cp)
+  )),
+  # Next group of learners requiring special treatment of missingness
+  pl_missing %>>%
+    gunion(list(
+      po("learner_cv", lrn_ranger),
+      po("learner_cv", lrn_log_reg),
+      po("nop") # This passes through the original features adjusted for
+                # missingness to the super learner
+    )),
+  # Last group needing factor encoding
+  pl_factor %>>%
+    po("learner_cv", lrn_xgboost)
+)) %>>%
+  po("featureunion") %>>%
+  po(lrnsp_log_reg)
+
+# This plot shows a graph of the learning pipeline
+spr_lrn$plot()
+
+# Finally fit the base learners and super learner and evaluate
+res_spr <- resample(hotels_task, spr_lrn, cv5, store_models = TRUE)
+res_spr$aggregate(list(msr("classif.ce"),
+                       msr("classif.acc"),
+                       msr("classif.fpr"),
+                       msr("classif.fnr")))
+```
+
+### 逻辑回归 improve
+
+```{r}
+search_space = ps(
+  epsilon = p_dbl(lower = 1e-15, upper = 1e-05),
+  maxit = p_int(lower = 1, upper = 30)
+)
+search_space
+
+measures = msrs(c("classif.acc", "time_train"))
+library("mlr3tuning")
+
+evals20 = trm("evals", n_evals = 20)
+
+instance = TuningInstanceMultiCrit$new(
+  task = hotels_task,
+  learner = lrn_log_reg ,
+  resampling = rsmp("holdout"),
+  measures = measures,
+  search_space = search_space,
+  terminator = evals20
+)
+instance
+
+#tuner=tnr("random_search")
+tuner = tnr("grid_search", resolution = 5)
+tuner$optimize(instance)
+instance$result_y
+instance$result_learner_param_vals
+```
+
+
+
+
+
+
+
+
+
+
+
+
+
+### Super learner
+```{r}
+lb <- lrn("classif.featureless", predict_type = "prob")
+lc <- lrn("classif.rpart", predict_type = "prob")
+```
+```{r}
+lrn_cart_cp  <- lrn("classif.rpart", predict_type = "prob", cp = 0.025, id = "cartcp")
+lrn_ranger   <- lrn("classif.ranger", predict_type = "prob")
+lrn_xgboost  <- lrn("classif.xgboost", predict_type = "prob")
+```
+
+```{r}
+hotels_res <- benchmark(data.table(
+  task       = list(hotels_task),
+  learner    = list(lb,
+                    lc,
+                    lrn_cart_cp,
+                    
+                    pl_log_reg),
+  resampling = list(cv5)
+), store_models = TRUE)
+
+hotels_res$aggregate(list(msr("classif.ce"),
+                   msr("classif.acc"),
+                   msr("classif.fpr"),
+                   msr("classif.fnr")))
+```
+
+
+```{r}
+lrnsp_log_reg <- lrn("classif.log_reg", predict_type = "prob", id = "super")
+
+# Factors coding pipeline
+pl_factor <- po("encode")
+
+# Now define the full pipeline
+spr_lrn <- gunion(list(
+  # First group of learners requiring no modification to input
+  gunion(list(
+    po("learner_cv", lb),
+    po("learner_cv", lc),
+    po("learner_cv", lrn_cart_cp)
+  )),
+  # Next group of learners requiring special treatment of missingness
+  pl_missing %>>%
+    gunion(list(
+      po("learner_cv", lrn_ranger),
+      po("learner_cv", lrn_log_reg),
+      po("nop") # This passes through the original features adjusted for
+                # missingness to the super learner
+    )),
+  # Last group needing factor encoding
+  pl_factor %>>%
+    po("learner_cv", lrn_xgboost)
+)) %>>%
+  po("featureunion") %>>%
+  po(lrnsp_log_reg)
+
+# This plot shows a graph of the learning pipeline
+spr_lrn$plot()
+
+# Finally fit the base learners and super learner and evaluate
+res_spr <- resample(hotels_task, spr_lrn, cv5, store_models = TRUE)
+res_spr$aggregate(list(msr("classif.ce"),
+                       msr("classif.acc"),
+                       msr("classif.fpr"),
+                       msr("classif.fnr")))
+```
+
+
 
 ```{r}
 N = length(hotels$is_canceled)                                                 
