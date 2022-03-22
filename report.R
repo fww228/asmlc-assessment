@@ -83,14 +83,20 @@ conf.mat/rowSums(conf.mat)*100
 fit.lr <- glm(as.factor(is_canceled) ~ ., binomial, hotels, epsilon = 1e-5)
 pred.lr <- predict(fit.lr, hotels, type = "response")
 conf.mat <- table(`canceled` = hotels$is_canceled, `predict cancel` = pred.lr > 0.5)
-# Figure 12 and 13
 conf.mat
 conf.mat/rowSums(conf.mat)*100
+
+## LDA
+hotels_lda <- MASS::lda(is_canceled ~ ., hotels)
+hotels_pred <- predict(hotels_lda, na.omit(hotels))
+mean(I(hotels_pred$class == na.omit(hotels)$is_canceled))
+# Figure 10 and 11
+table(truth = na.omit(hotels)$is_canceled, prediction = hotels_pred$class)
 
 ## Cross validation
 hotels <- hotels %>% select(-customer_type, -adults)
 hotels$deposit_type <- factor(hotels$deposit_type, levels=c("No Deposit", "Non Refund", "Refundable"), ordered = TRUE)
-hotels$is_canceled <- factor(hotels$is_canceled, levels=c("0", "1"), ordered = TRUE)
+hotels$is_canceled <- factor(hotels$is_canceled, levels=c("0", "1"))
 hotels$lead_time <- factor(hotels$lead_time)
 hotels$is_repeated_guest <- factor(hotels$is_repeated_guest)
 hotels$previous_cancellations <- factor(hotels$previous_cancellations)
@@ -105,7 +111,7 @@ cv5$instantiate(hotels_task)
 
 lrn_cart_cv <- lrn("classif.rpart", predict_type = "prob", xval = 10)
 res_cart_cv <- resample(hotels_task, lrn_cart_cv, cv5, store_models = TRUE)
-# Figure 10
+# Figure 12
 rpart::plotcp(res_cart_cv$learners[[5]]$model)
 
 # Diﬀerent models and super learner

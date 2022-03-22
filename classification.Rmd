@@ -96,7 +96,6 @@ skimr::skim(hotels2)
 ggpairs(hotels2 %>% select(hotel, meal, market_segment, distribution_channel, deposit_type, customer_type, kids, parking, adr, adults, is_canceled), aes(color = kids))
 ```
 
-
 ```{r}
 ggpairs(hotels2 %>% select(kids, lead_time, is_repeated_guest, previous_cancellations, previous_bookings_not_canceled, previous_bookings_not_canceled, booking_changes, days_in_waiting_list, total_of_special_requests, total_nights, room_type, is_canceled), aes(color = kids))
 ```
@@ -189,6 +188,15 @@ conf.mat/rowSums(conf.mat)*100
 skimr::skim(hotels)
 ```
 
+```{r}
+hotels_lda <- MASS::lda(is_canceled ~ ., hotels)
+hotels_pred <- predict(hotels_lda, na.omit(hotels))
+mean(I(hotels_pred$class == na.omit(hotels)$is_canceled))
+table(truth = na.omit(hotels)$is_canceled, prediction = hotels_pred$class)
+```
+
+
+
 ## 加入超参数
 ```{r}
 fit.lr <- glm(as.factor(is_canceled) ~ ., binomial, hotels, epsilon = 1e-5)
@@ -211,7 +219,7 @@ conf.mat/rowSums(conf.mat)*100
 ```{r}
 hotels <- hotels %>% select(-customer_type, -adults)
 hotels$deposit_type <- factor(hotels$deposit_type, levels=c("No Deposit", "Non Refund", "Refundable"), ordered = TRUE)
-hotels$is_canceled <- factor(hotels$is_canceled, levels=c("0", "1"), ordered = TRUE)
+hotels$is_canceled <- factor(hotels$is_canceled, levels=c("0", "1"))
 ```
 ```{r}
 hotels$lead_time <- factor(hotels$lead_time)
@@ -361,11 +369,12 @@ hotels_res <- benchmark(data.table(
   learner    = list(lb,
                     lc,
                     lrn_cart_cp,
-                    
+                    lrn_ranger,
+                    lrn_xgboost,
                     pl_log_reg),
   resampling = list(cv5)
 ), store_models = TRUE)
-
+hotels_res$aggregate()
 hotels_res$aggregate(list(msr("classif.ce"),
                    msr("classif.acc"),
                    msr("classif.fpr"),

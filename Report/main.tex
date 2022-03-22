@@ -153,47 +153,15 @@ Logistic regression was used to solve this problem based on the choice of the nu
 
 It can be seen that the model gives the probability of the full data and by setting the threshold to 0.5 the model prediction can be obtained.
 
-The TPR of the model can be calculated as 93.58 and the FNR as 52.06, with an overall correct rate of 82\%, which seems good but could be improved.
+The overall correct rate of this model is 82\%, which seems good but could be improved.
 
 \section{Model Improvements}
 
-The addition of the hyperparameter epsilon=1e-5 to the logistic regression was tried, however the results did not change. Therefore, cross-validation was used to improve the accuracy and the following cross-validation diagram was obtained.
+Some methods were made to improve the accuracy of prediction.
 
-A number of different models from the \verb|mlr3| library were tried to test their accuracy, and a super learner was defined to find the best performing model. Figure 10 and 11 show the cross-validation and super learner diagrams respectively.
+1. The addition of the hyperparameter epsilon=1e-5 to the logistic regression was tried, however the results did not change. 
 
-\begin{figure}[htbp]
-\centering
-
-\subfigure[]{
-\begin{minipage}[h]{0.4\linewidth}
-\centering
-\includegraphics[width=2.6in]{val.png}
-\caption{Number}
-\end{minipage}%
-}%
-\subfigure[]{
-\begin{minipage}[h]{0.5\linewidth}
-\centering
-\includegraphics[width=2.7in]{sl.png}
-\caption{Proportion}
-\end{minipage}%
-}%
-
-\centering
-\end{figure}
-
-
-
-
-\section{Performance Report}
-
-\subsection{Model selection}
-For a simple logistic regression model, it is good enough to get 82\% correct, but the results improve again when cross-validation is used.
-
-For problems with small datasets in general, using simple logistic regression will lead to an increase in efficiency because it is faster and gives a relatively good result; but for larger datasets, using other methods such as cross-validation can improve the correctness rate.
-
-\subsection{Post-model analysis}
-The number and proportion of TPR, FPR, TNR and FNR obtained by simple logistic regression are shown in Figure 12 and 13.
+2. Analysis using an alternative method - Linear Discriminant Analysis. In this trial, the accuracy was 76.4\%, which is not as good as simple logistic regression. As shown in Figure 10 and 11, which show the predicted values for the simple logistic regression and LDA models respectively, it is clear that the simple logistic regression has a higher TPR, while LDA has a higher FNR.
 
 \begin{figure}[htbp]
 \centering
@@ -202,13 +170,13 @@ The number and proportion of TPR, FPR, TNR and FNR obtained by simple logistic r
 \begin{minipage}[h]{0.4\linewidth}
 \centering
 \includegraphics[width=2.5in]{tprn.png}
-\caption{Number}
+\caption{Simple logistic regression}
 \end{minipage}%
 }%
 \subfigure[]{
 \begin{minipage}[h]{0.5\linewidth}
 \centering
-\includegraphics[width=3in]{tprp.png}
+\includegraphics[width=2in]{lda.png}
 \caption{Proportion}
 \end{minipage}%
 }%
@@ -216,7 +184,28 @@ The number and proportion of TPR, FPR, TNR and FNR obtained by simple logistic r
 \centering
 \end{figure}
 
-It is clear from the results that in this model, TPR=52.06, FPR=47.94, TNR=6.42 and FNR=93.58.
+
+3. Cross-validation was used to improve the accuracy and the following cross-validation diagram was obtained. The accuracy of the model obtained by cross-validation is shown in Figure 12, from which it can be seen that it is advisable to set the cross-validation parameter \verb|cp| at 0.015 to minimise the error.
+
+\begin{figure}[ht]
+\centering
+\includegraphics[width=8cm]{val.png} %[图片大小]{图片路径}
+\caption{Cross validation result} %图片标题
+\end{figure}
+
+
+4. A number of different models from the \verb|mlr3| library were tried to test their accuracy, and a super learner was defined to find the best performing model. 
+
+
+\section{Performance Report}
+
+\subsection{Model selection}
+For a simple logistic regression model, it is good enough to get total 82\% correct, but the results improve again when cross-validation is used.
+
+For problems with small datasets in general, using simple logistic regression will lead to an increase in efficiency because it is faster and gives a relatively good result; but for larger datasets, using other methods such as cross-validation can improve the correctness rate.
+
+\subsection{Post-model analysis}
+We can obtain the TPR, FPR, TNR, FNR of simple logistic regression by calculation. In this model, TPR=52.06, FPR=47.94, TNR=6.42 and FNR=93.58.
 
 For false negatives and false positives, I would be more concerned about false positives in this problem. One reason is that false negatives are correctly predicted and more accurate, the other reason is false positives mean that the guest did not want to withdraw, but the system calculated that the guest would, which would cause the hotel to lose credibility.
 
